@@ -1,11 +1,11 @@
 streamlit==1.24.0
 moviepy==1.0.3
 opencv-python==4.5.5.64
-numpy==1.23.5
+numpy>=1.26.0
 imageio==2.37.0
 imageio-ffmpeg==0.6.0
 decorator==4.4.2
 pillow==9.5.0
 tqdm==4.67.1
 python-dotenv==1.0.0
-proglog==0.1.10
+prolog==0.1.10
