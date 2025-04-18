@@ -1,4 +1,3 @@
-
 import streamlit as st
 import os
 import shutil
@@ -31,6 +30,7 @@ with col1:
 with col2:
     tiktok_link = st.text_input("Paste a TikTok video link", placeholder="https://www.tiktok.com/...", label_visibility="collapsed")
 
+# --- Handle video upload or TikTok link ---
 if uploaded_file:
     temp_file_path = os.path.join("temp", f"{uuid.uuid4()}.mp4")
     with open(temp_file_path, "wb") as f:
@@ -43,7 +43,8 @@ elif tiktok_link:
     try:
         with st.spinner("Downloading video from TikTok..."):
             clean_link = tiktok_link.split("?")[0]
-            st.session_state.video_path = download_tiktok_video(clean_link)
+            download_dir = tempfile.mkdtemp()
+            st.session_state.video_path = download_tiktok_video(clean_link, download_dir)
             st.session_state.video_uploaded = True
             st.success("✅ TikTok video downloaded successfully.")
     except Exception as e:
