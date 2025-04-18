@@ -8,4 +8,3 @@ decorator==4.4.2
 pillow==9.5.0
 tqdm==4.67.1
 python-dotenv==1.0.0
-prolog==0.1.10
