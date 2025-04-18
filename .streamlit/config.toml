@@ -1,7 +1,4 @@
 [server]
 headless = true
+port = "${PORT}"
 enableCORS = false
-port = $PORT
-
-[general]
-requirements = "requirements-prod.txt"
