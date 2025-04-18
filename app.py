@@ -71,12 +71,18 @@ if st.session_state.gif_paths:
                 if gif_path in st.session_state.selected_gifs:
                     st.session_state.selected_gifs.remove(gif_path)
 
+    # --- Download all GIFs ---
+    if st.button("⬇️ Download All GIFs"):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            zip_path = os.path.join(tmpdir, "all_gifs.zip")
+            shutil.make_archive(zip_path.replace(".zip", ""), 'zip', root_dir=os.path.dirname(st.session_state.gif_paths[0]))
+            with open(zip_path, "rb") as f:
+                st.download_button("📦 Download All GIFs", f, file_name="all_gifs.zip", mime="application/zip")
+
     # --- Combine selected GIFs ---
     if st.session_state.selected_gifs:
         if st.button("📦 Combine Selected GIFs"):
             combined_path = combine_gifs(st.session_state.selected_gifs)
             if combined_path:
-                st.success("✅ Combined GIF created.")
-                st.image(combined_path, caption="Combined GIF")
                 with open(combined_path, "rb") as f:
                     st.download_button("⬇️ Download Combined GIF", f, file_name="combined.gif", mime="image/gif")
