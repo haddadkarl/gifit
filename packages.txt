@@ -1,3 +1,4 @@
 libgl1-mesa-glx
 libatlas-base-dev
 libatlas-base-dev
+zlib1g-dev
