@@ -1,63 +1,82 @@
 import os
-import yt_dlp
-import tempfile
 import cv2
 import shutil
-from scenedetect import VideoManager, SceneManager
-from scenedetect.detectors import ContentDetector
-from moviepy.editor import VideoFileClip
-from PIL import Image
+import tempfile
+from moviepy.editor import VideoFileClip, concatenate_videoclips
+from scenedetect import SceneManager, open_video, ContentDetector
+from scenedetect.scene_manager import save_images
+import yt_dlp
 
-def download_video_from_tiktok(url):
-    try:
-        temp_dir = tempfile.mkdtemp()
-        output_template = os.path.join(temp_dir, '%(id)s.%(ext)s')
-        ydl_opts = {
-            'outtmpl': output_template,
-            'format': 'mp4/best',
-            'quiet': True,
-            'noplaylist': True,
-        }
-        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            info_dict = ydl.extract_info(url, download=True)
-            video_path = ydl.prepare_filename(info_dict)
-        return video_path
-    except Exception as e:
-        print(f"Error downloading TikTok video: {e}")
-        return None
 
-def detect_scenes(video_path):
-    video_manager = VideoManager([video_path])
+def download_tiktok_video(tiktok_url, download_dir):
+    video_path = os.path.join(download_dir, "tiktok_video.mp4")
+    ydl_opts = {
+        'outtmpl': video_path,
+        'format': 'best[ext=mp4]',
+        'quiet': True,
+        'noplaylist': True
+    }
+    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+        ydl.download([tiktok_url])
+    return video_path
+
+
+def detect_scenes(video_path, output_dir):
+    video = open_video(video_path)
     scene_manager = SceneManager()
     scene_manager.add_detector(ContentDetector())
-    video_manager.set_downscale_factor()
-    video_manager.start()
-    scene_manager.detect_scenes(frame_source=video_manager)
+    scene_manager.detect_scenes(video)
     scene_list = scene_manager.get_scene_list()
-    return scene_list
 
-def generate_gifs(video_path, scene_list, resolution='480p'):
-    temp_dir = tempfile.mkdtemp()
-    output_paths = []
+    if not os.path.exists(output_dir):
+        os.makedirs(output_dir)
+
+    scene_paths = []
+    for i, (start_time, end_time) in enumerate(scene_list):
+        start_seconds = start_time.get_seconds()
+        end_seconds = end_time.get_seconds()
+
+        clip = VideoFileClip(video_path).subclip(start_seconds, end_seconds)
+        scene_path = os.path.join(output_dir, f"scene_{i + 1}.gif")
+
+        # Preserve aspect ratio
+        width, height = clip.size
+        clip.write_gif(scene_path, program='imageio', fps=10)
+        scene_paths.append(scene_path)
+
+    return scene_paths
+
+
+def generate_gifs(video_path, output_dir, resolution='original'):
+    if not os.path.exists(output_dir):
+        os.makedirs(output_dir)
+
     clip = VideoFileClip(video_path)
+    width, height = clip.size
 
-    res_map = {
-        '480p': (854, 480),
-        '720p': (1280, 720),
-        'original': None
-    }
+    if resolution == '720p':
+        target_width = 720
+    elif resolution == '480p':
+        target_width = 480
+    else:
+        target_width = width  # Original
 
-    for i, (start, end) in enumerate(scene_list):
-        subclip = clip.subclip(start.get_seconds(), end.get_seconds())
-        if resolution != 'original':
-            subclip = subclip.resize(newsize=res_map[resolution])
-        gif_path = os.path.join(temp_dir, f'scene_{i+1}.gif')
-        subclip.write_gif(gif_path, program='imageio')
-        output_paths.append(gif_path)
+    scene_paths = detect_scenes(video_path, output_dir)
+    resized_paths = []
 
-    return output_paths
+    for path in scene_paths:
+        gif_clip = VideoFileClip(path)
+        if target_width != width:
+            gif_clip = gif_clip.resize(width=target_width)
+        output_path = path  # Overwrite same file
+        gif_clip.write_gif(output_path, program='imageio', fps=10)
+        resized_paths.append(output_path)
 
-def combine_gifs(gif_paths, output_path='combined.gif'):
-    images = [Image.open(g) for g in gif_paths]
-    images[0].save(output_path, save_all=True, append_images=images[1:], loop=0, duration=500)
+    return resized_paths
+
+
+def combine_gifs(gif_paths, output_path="combined.gif"):
+    clips = [VideoFileClip(path) for path in gif_paths]
+    final_clip = concatenate_videoclips(clips, method="compose")
+    final_clip.write_gif(output_path, fps=10)
     return output_path
