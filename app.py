@@ -32,6 +32,7 @@ with col2:
 
 # --- Handle video upload or TikTok link ---
 if uploaded_file:
+    os.makedirs("temp", exist_ok=True)  # ✅ Ensure temp directory exists
     temp_file_path = os.path.join("temp", f"{uuid.uuid4()}.mp4")
     with open(temp_file_path, "wb") as f:
         f.write(uploaded_file.read())
