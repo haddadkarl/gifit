@@ -2,48 +2,66 @@ import streamlit as st
 import os
 import shutil
 from utils import detect_scenes, generate_gifs, combine_gifs
+from pytube import YouTube
+import tempfile
 
 st.set_page_config(page_title="GifIt — Scene to GIF", layout="wide")
 st.title("🎬 GifIt — Scene to GIF")
 
-# Initialize session state
-if 'scene_list' not in st.session_state:
-    st.session_state.scene_list = []
-if 'gif_paths' not in st.session_state:
-    st.session_state.gif_paths = []
-if 'selected_gifs' not in st.session_state:
-    st.session_state.selected_gifs = []
-
-# Upload video
-uploaded_file = st.file_uploader("Upload a video", type=["mp4", "mov", "avi"])
-resolution = st.selectbox("Select resolution for GIFs", ["Original", "720", "460"])
-
-if uploaded_file:
-    # Clear previous session state
+# Session state setup
+if "video_path" not in st.session_state:
+    st.session_state.video_path = None
     st.session_state.scene_list = []
     st.session_state.gif_paths = []
     st.session_state.selected_gifs = []
+    st.session_state.tiktok_link = ""
+    st.session_state.resolution = None
 
-    # Save uploaded video
-    os.makedirs("uploads", exist_ok=True)
-    video_path = os.path.join("uploads", uploaded_file.name)
-    with open(video_path, "wb") as f:
-        f.write(uploaded_file.read())
-    st.video(video_path)
+# Resolution options
+res_options = {"Original": None, "720p": (1280, 720), "480p": (854, 480), "360p": (640, 360)}
+res_choice = st.selectbox("Select GIF Resolution", list(res_options.keys()))
+st.session_state.resolution = res_options[res_choice]
 
-    # Detect scenes
-    if st.button("Detect Scenes"):
-        st.session_state.scene_list = detect_scenes(video_path)
-        st.success(f"✅ Detected {len(st.session_state.scene_list)} scenes.")
+# TikTok URL input or file upload
+video_source = st.radio("Upload method", ["Upload file", "Paste TikTok link"])
+if video_source == "Upload file":
+    uploaded_file = st.file_uploader("Upload a video", type=["mp4", "mov"])
+    if uploaded_file:
+        tmp_dir = tempfile.mkdtemp()
+        video_path = os.path.join(tmp_dir, uploaded_file.name)
+        with open(video_path, "wb") as f:
+            f.write(uploaded_file.read())
+        st.session_state.video_path = video_path
+elif video_source == "Paste TikTok link":
+    link = st.text_input("Paste TikTok video link:")
+    if link:
+        try:
+            yt = YouTube(link)
+            stream = yt.streams.filter(file_extension='mp4', resolution="360p").first()
+            tmp_dir = tempfile.mkdtemp()
+            video_path = os.path.join(tmp_dir, "tiktok_video.mp4")
+            stream.download(output_path=tmp_dir, filename="tiktok_video.mp4")
+            st.session_state.video_path = video_path
+            st.success("TikTok video downloaded!")
+        except Exception as e:
+            st.error(f"Failed to fetch video: {e}")
 
-    # Generate GIFs
-    if st.session_state.scene_list:
-        if st.button("Generate GIFs"):
-            os.makedirs("gifs_output", exist_ok=True)
-            st.session_state.gif_paths = generate_gifs(video_path, st.session_state.scene_list, resolution)
-            st.success(f"✅ Generated {len(st.session_state.gif_paths)} GIFs.")
+# Detect scenes
+if st.session_state.video_path and st.button("🎞️ Detect Scenes"):
+    st.session_state.scene_list = detect_scenes(st.session_state.video_path)
+    st.success(f"Detected {len(st.session_state.scene_list)} scenes.")
 
-# Display GIFs and select for combination
+# Generate GIFs
+if st.session_state.scene_list and st.button("🎬 Generate GIFs"):
+    st.session_state.gif_paths = generate_gifs(
+        st.session_state.video_path,
+        st.session_state.scene_list,
+        output_dir="gifs_output",
+        resolution=st.session_state.resolution,
+    )
+    st.success(f"Generated {len(st.session_state.gif_paths)} GIFs.")
+
+# Display GIFs with selection checkboxes
 if st.session_state.gif_paths:
     st.subheader("🖼️ Scene Gallery — Select GIFs to Combine")
     cols = st.columns(4)
@@ -57,11 +75,20 @@ if st.session_state.gif_paths:
                 if gif_path in st.session_state.selected_gifs:
                     st.session_state.selected_gifs.remove(gif_path)
 
-# Combine selected GIFs
-if len(st.session_state.selected_gifs) > 1:
-    if st.button("Generate Combined GIF"):
-        combined_path = combine_gifs(st.session_state.selected_gifs)
-        st.success("🎉 Combined GIF generated!")
-        st.image(combined_path)
-        with open(combined_path, "rb") as f:
-            st.download_button("Download Combined GIF", f, file_name="combined.gif", mime="image/gif")
+# Combine and download buttons
+if st.session_state.selected_gifs:
+    if st.button("🧩 Combine Selected GIFs"):
+        output_path = "gifs_output/combined.gif"
+        combine_gifs(st.session_state.selected_gifs, output_path)
+        with open(output_path, "rb") as f:
+            st.download_button("⬇️ Download Combined GIF", f, file_name="combined.gif")
+
+if st.session_state.gif_paths:
+    if st.button("⬇️ Download All GIFs as ZIP"):
+        import zipfile
+        zip_path = "gifs_output/all_gifs.zip"
+        with zipfile.ZipFile(zip_path, "w") as zipf:
+            for gif in st.session_state.gif_paths:
+                zipf.write(gif, os.path.basename(gif))
+        with open(zip_path, "rb") as f:
+            st.download_button("⬇️ Download ZIP", f, file_name="all_gifs.zip")
